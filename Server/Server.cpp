@@ -1,5 +1,4 @@
 ﻿#include "pch.h"
-#include "commands.h"  // 추가된 헤더 파일 포함
 #include <winsock2.h>
 #include <iostream>
 #include <vector>
@@ -18,6 +17,8 @@ public:
     ~CServer();
     bool Initialize();
     void StartListening();
+    void SendRandomNumberToClients();
+    void DisplayClientInfo();
     void ReceiveCommandsFromClients();  // 명령어 수신 함수 추가
 
 private:
@@ -81,7 +82,27 @@ void CServer::StartListening() {
         m_clientSockets.push_back(clientSocket);
         std::cout << "Client connected!" << std::endl;
 
-        ReceiveCommandsFromClients();  // 명령어 처리 함수 호출
+        // 명령어를 받는 함수 호출
+        ReceiveCommandsFromClients();
+    }
+}
+
+void CServer::SendRandomNumberToClients() {
+    srand(static_cast<unsigned int>(time(0)));  // 랜덤 시드 초기화
+    int randomNumber = rand() % 20 + 1;
+
+    for (auto& clientSocket : m_clientSockets) {
+        std::string message = "Random Number: " + std::to_string(randomNumber);
+        send(clientSocket, message.c_str(), message.length(), 0);
+    }
+
+    std::cout << "Sent random number to all clients: " << randomNumber << std::endl;
+}
+
+void CServer::DisplayClientInfo() {
+    std::cout << "Current number of clients: " << m_clientSockets.size() << std::endl;
+    for (size_t i = 0; i < m_clientSockets.size(); ++i) {
+        std::cout << "Client " << i + 1 << ": Socket ID: " << m_clientSockets[i] << std::endl;
     }
 }
 
@@ -97,15 +118,18 @@ void CServer::ReceiveCommandsFromClients() {
 
             // 클라이언트로부터 명령어가 "start"이면 랜덤 번호 전송
             if (strcmp(buffer, "start") == 0) {
-                HandleStartCommand(clientSocket, m_clientSockets);
+                SendRandomNumberToClients();
             }
             // 클라이언트로부터 명령어가 "list"이면 클라이언트 정보 출력
             else if (strcmp(buffer, "list") == 0) {
-                HandleListCommand(clientSocket, m_clientSockets);
+                DisplayClientInfo();
             }
             // 클라이언트로부터 명령어가 "exit"이면 해당 클라이언트 종료
             else if (strcmp(buffer, "exit") == 0) {
-                HandleExitCommand(clientSocket, m_clientSockets);
+                std::cout << "Client requested exit." << std::endl;
+                closesocket(clientSocket);
+                m_clientSockets.erase(std::remove(m_clientSockets.begin(), m_clientSockets.end(), clientSocket), m_clientSockets.end());
+                std::cout << "Client disconnected." << std::endl;
             }
         }
         else {
