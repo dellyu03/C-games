@@ -6,12 +6,15 @@
 #include <string>
 #include <thread>
 #include <algorithm>  // std::remove 사용을 위한 헤더
+#include <random>
 
 #pragma comment(lib, "ws2_32.lib")
 
 #define SERVER_PORT 9000
 #define BUF_SIZE 512
 
+
+// 서버 구조체
 class CServer {
 public:
     CServer();
@@ -39,6 +42,8 @@ CServer::~CServer() {
     WSACleanup();
 }
 
+
+//서버 시작시 시작되는 코드
 bool CServer::Initialize() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -65,6 +70,7 @@ bool CServer::Initialize() {
     return true;
 }
 
+//서버 명령어 대기 관련 코드
 void CServer::StartListening() {
     if (listen(m_listenSocket, SOMAXCONN) == SOCKET_ERROR) {
         std::cerr << "Listen failed!" << std::endl;
@@ -89,14 +95,31 @@ void CServer::StartListening() {
     }
 }
 
+//랜덤 숫자 생성 코드
 void CServer::SendRandomNumberToClient(SOCKET clientSocket) {
-    srand(static_cast<unsigned int>(time(0)));  // 랜덤 시드 초기화
-    int randomNumber = rand() % 20 + 1;
+    // 1부터 20까지의 숫자를 벡터에 저장
+    std::vector<int> numbers;
+    for (int i = 1; i <= 20; ++i) {
+        numbers.push_back(i);
+    }
 
-    std::string message = "Random Number: " + std::to_string(randomNumber);
+    // 랜덤 셔플을 위한 랜덤 엔진과 분포
+    std::random_device rd;
+    std::mt19937 g(rd());  // Mersenne Twister 엔진을 사용
+    std::shuffle(numbers.begin(), numbers.end(), g);  // 벡터 내 숫자 랜덤하게 섞기
+
+    // 첫 9개의 숫자를 랜덤으로 선택
+    numbers.resize(9);
+
+    // 결과 메시지 생성
+    std::string message = "Random Numbers: ";
+    for (int num : numbers) {
+        message += std::to_string(num) + " ";
+    }
+
+    // 클라이언트에게 메시지 전송
     send(clientSocket, message.c_str(), message.length(), 0);
-
-    std::cout << "Sent random number to client: " << randomNumber << std::endl;
+    std::cout << "Sent random numbers to client: " << message << std::endl;
 }
 
 void CServer::DisplayClientInfo() {
@@ -106,6 +129,7 @@ void CServer::DisplayClientInfo() {
     }
 }
 
+//클라이언트 명령어 리시브 코드
 void CServer::ReceiveCommandsFromClient(SOCKET clientSocket) {
     char buffer[BUF_SIZE];
 
