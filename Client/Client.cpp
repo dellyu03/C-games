@@ -97,7 +97,6 @@ void CClient::SendMessage(const std::string& message) {
     send(m_socket, message.c_str(), message.length(), 0);
 }
 
-// 서버 메시지 리스폰스
 void CClient::ReceiveMessagesAsync() {
     while (m_isConnected) {
         fd_set readfds;
@@ -128,11 +127,6 @@ void CClient::ReceiveMessagesAsync() {
                 buffer[bytesReceived] = '\0';
                 std::string receivedMessage(buffer);
 
-                // 카운트다운 메시지를 받으면 무시
-                if (receivedMessage.find("countdown") != std::string::npos) {
-                    continue;
-                }
-
                 // "completed" 메시지를 받으면 명령 대기 상태로 돌아감
                 if (receivedMessage == "completed") {
                     HandleCompletedMessage();
@@ -141,28 +135,39 @@ void CClient::ReceiveMessagesAsync() {
 
                 std::cout << receivedMessage << std::endl;
 
-                // 서버에서 받은 메시지를 숫자 리스트로 파싱
+                // "number_list:" 이후의 숫자들만 파싱
                 std::vector<int> numberList;
                 std::istringstream iss(receivedMessage);
                 std::string token;
+                bool isNumberList = false;  // number_list: 이후 숫자만 파싱할 플래그
+
+                // "number_list:" 이후의 숫자들만 추출
                 while (iss >> token) {
-                    if (isdigit(token[0])) {  // 숫자인 경우만 추가
+                    if (token == "number_list:") {
+                        isNumberList = true;  // number_list: 이후로부터 숫자만 추출
+                        continue;  // "number_list:" 부분을 건너뜀
+                    }
+
+                    // number_list: 이후에만 숫자를 추가
+                    if (isNumberList && isdigit(token[0])) {
                         numberList.push_back(std::stoi(token));
                     }
                 }
 
                 // 받은 숫자에 해당하는 인덱스의 파일만 출력
-                std::string directoryPath = "C:\\Users\\ms\\Desktop\\dellyu03\\project\\img";   //여기에 원하는 파일 경로 입력
-                std::vector<std::string> fileNames = GetFileList(directoryPath);
+                if (!numberList.empty()) {
+                    std::string directoryPath = "C:\\Users\\ms\\Desktop\\dellyu03\\project\\img";   // 원하는 파일 경로
+                    std::vector<std::string> fileNames = GetFileList(directoryPath);
 
-                // 받은 숫자에 해당하는 인덱스의 파일만 출력
-                std::cout << "Selected Files: ";
-                for (int num : numberList) {
-                    if (num - 1 < fileNames.size()) {
-                        std::cout << fileNames[num - 1] << " ";
+                    // 받은 숫자에 해당하는 인덱스의 파일만 출력
+                    std::cout << "Selected Files: ";
+                    for (int num : numberList) {
+                        if (num - 1 < fileNames.size()) {  // 인덱스는 1부터 시작하므로 -1로 맞추기
+                            std::cout << fileNames[num - 1] << " ";
+                        }
                     }
+                    std::cout << std::endl;
                 }
-                std::cout << std::endl;
             }
         }
         else if (selectResult == 0) {  // 타임아웃 발생
@@ -175,6 +180,8 @@ void CClient::ReceiveMessagesAsync() {
         }
     }
 }
+
+
 
 void CClient::UserInput() {
     while (true) {

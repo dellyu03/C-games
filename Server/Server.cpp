@@ -97,10 +97,12 @@ void CServer::StartListening() {
 }
 
 void CServer::SendRandomNumberToClient(SOCKET clientSocket) {
-    // 1부터 20까지의 숫자를 벡터에 저장
+    // 1부터 20까지의 숫자 중 홀수만 선택
     std::vector<int> numbers;
     for (int i = 1; i <= 20; ++i) {
-        numbers.push_back(i);
+        if (i % 2 != 0) {  // 홀수만 추가
+            numbers.push_back(i);
+        }
     }
 
     // 랜덤 셔플을 위한 랜덤 엔진과 분포
@@ -108,17 +110,17 @@ void CServer::SendRandomNumberToClient(SOCKET clientSocket) {
     std::mt19937 g(rd());  // Mersenne Twister 엔진을 사용
     std::shuffle(numbers.begin(), numbers.end(), g);  // 벡터 내 숫자 랜덤하게 섞기
 
-    // 뽑을 숫자 개수 선택
-    numbers.resize(16);
+    // 뽑을 숫자 개수는 8개로 제한
+    numbers.resize(8);
 
-    // 랜덤 숫자 리스트 전송
+    // 랜덤 홀수 리스트 전송
     std::string message = "number_list: ";
     for (int num : numbers) {
         message += std::to_string(num) + " ";
     }
 
     send(clientSocket, message.c_str(), message.length(), 0);
-    std::cout << "Sent random numbers to client: " << message << std::endl;
+    std::cout << "Sent random odd numbers to client: " << message << std::endl;
 }
 
 void CServer::DisplayClientInfo() {
