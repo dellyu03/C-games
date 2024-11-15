@@ -150,7 +150,7 @@ void CServer::ReceiveCommandsFromClient(SOCKET clientSocket) {
             buffer[bytesReceived] = '\0';
             std::cout << "Received command from client: " << buffer << std::endl;
 
-            // 클라이언트로부터 명령어가 "game_start"이면 랜덤 번호 전송
+            // 게임 시작 명령어 처리
             if (strcmp(buffer, "game_start") == 0) {
                 if (gameState == 1 || gameState == 2) {
                     std::string alreadyGameMessage = "Game already started or in progress.";
@@ -161,13 +161,28 @@ void CServer::ReceiveCommandsFromClient(SOCKET clientSocket) {
                     StartGame();  // 게임 시작
                 }
             }
+            // 게임 중 정답을 맞췄다는 명령어 처리
+            else if (strcmp(buffer, "correct") == 0) {
+                std::cout << "Correct answer received from client: " << clientSocket << std::endl;
+
+                // 게임 종료
+                EndGame();
+
+                // 정답을 맞춘 플레이어 정보를 모든 클라이언트에게 전송
+                std::string correctMessage = "Player with socket " + std::to_string(clientSocket) + " has answered correctly!";
+                for (SOCKET client : m_clientSockets) {
+                    send(client, correctMessage.c_str(), correctMessage.length(), 0);
+                }
+                std::cout << "Sent correct player information to all clients." << std::endl;
+                break;  // 해당 클라이언트 스레드 종료
+            }
             // 클라이언트로부터 명령어가 "exit"이면 해당 클라이언트 종료
             else if (strcmp(buffer, "exit") == 0) {
                 std::cout << "Client requested exit." << std::endl;
                 closesocket(clientSocket);
                 m_clientSockets.erase(std::remove(m_clientSockets.begin(), m_clientSockets.end(), clientSocket), m_clientSockets.end());
                 std::cout << "Client disconnected." << std::endl;
-                break; // 해당 클라이언트 스레드 종료
+                break;  // 해당 클라이언트 스레드 종료
             }
             // 알 수 없는 명령어 처리
             else {
@@ -181,12 +196,26 @@ void CServer::ReceiveCommandsFromClient(SOCKET clientSocket) {
         }
         else {
             std::cerr << "Failed to receive data from client!" << std::endl;
-            break; // 오류 발생 시 연결 종료
+            break;  // 오류 발생 시 연결 종료
         }
     }
 }
 
+
+
+
 void CServer::StartGame() {
+    if (m_clientSockets.size() <= 1) {
+        std::cout << "Not enough players to start the game!" << std::endl;
+
+        // 유저 부족 메시지 전송
+        std::string insufficientPlayersMessage = "Not enough players to start the game. At least 2 players are required.";
+        for (SOCKET clientSocket : m_clientSockets) {
+            send(clientSocket, insufficientPlayersMessage.c_str(), insufficientPlayersMessage.length(), 0);
+        }
+        return;  // 게임 시작하지 않음
+    }
+
     if (gameState == 1 || gameState == 2) {
         std::cout << "Game already started or in progress!" << std::endl;
         return;  // 게임이 이미 시작되었거나 진행 중이면 다시 시작하지 않음
@@ -204,8 +233,8 @@ void CServer::StartGame() {
         send(clientSocket, gameStartMessage.c_str(), gameStartMessage.length(), 0);
     }
 
-    // 10초 카운트다운
-    for (int i = 10; i > 0; --i) {
+    // 5초 카운트다운
+    for (int i = 5; i > 0; --i) {
         std::string countdownMessage = "Countdown: " + std::to_string(i) + " seconds";
         for (SOCKET clientSocket : m_clientSockets) {
             send(clientSocket, countdownMessage.c_str(), countdownMessage.length(), 0);
