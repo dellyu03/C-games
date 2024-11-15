@@ -134,13 +134,13 @@ void CClient::ReceiveMessage() {
             std::cout << std::endl;
 
             // 파일 목록 가져오기
-            std::string directoryPath = "C:\\Users\\ms\\Desktop\\dellyu03\\도움\\project\\img";
+            std::string directoryPath = "C:\\Users\\ms\\Desktop\\dellyu03\\project\\img";   //여기에 원하는 파일 경로 입력
             std::vector<std::string> fileNames = GetFileList(directoryPath);
 
             // 받은 숫자에 해당하는 인덱스의 파일만 출력
             std::cout << "Selected Files: ";
             for (int num : numberList) {
-                if (num - 1 < fileNames.size()) {  // 인덱스 조정: 1부터 시작하므로 -1
+                if (num - 1 < fileNames.size()) {  
                     std::cout << fileNames[num - 1] << " ";
                 }
             }
@@ -187,34 +187,18 @@ std::vector<std::string> CClient::GetFileList(const std::string& directoryPath) 
 
 int main() {
     CClient client;
-    std::string serverIp;
+    std::string serverIp = "127.0.0.1";  // 기본적으로 로컬 서버 IP로 설정
 
-    while (true) {
-        std::cout << "Enter server IP (or type 'exit' to quit): ";
-        std::cin >> serverIp;
+    bool retry = true;  // 연결 재시도 플래그
 
-        if (serverIp == "exit") {
-            break;  // 프로그램 종료
-        }
+    while (retry) {
+        std::cout << "Trying to connect to local server (" << serverIp << ")..." << std::endl;
 
-        bool validIp = false;
-        while (!validIp) {
-            // 서버 IP 유효성 검사
-            struct sockaddr_in sa;
-            int result = inet_pton(AF_INET, serverIp.c_str(), &(sa.sin_addr));
-            if (result != 1) {  // 유효하지 않은 IP
-                std::cerr << "Invalid IP address. Please try again." << std::endl;
-                std::cout << "Enter server IP: ";
-                std::cin >> serverIp;
-            }
-            else {
-                validIp = true;  // 유효한 IP일 경우 루프 종료
-            }
-        }
-
+        // 클라이언트 초기화
         if (client.Initialize()) {
             client.ConnectToServer(serverIp);
 
+            // 로컬 서버에 연결이 성공한 경우
             if (client.IsConnected()) {
                 std::string command;
                 while (client.IsConnected()) {
@@ -226,11 +210,19 @@ int main() {
                 }
             }
             else {
-                std::cerr << "Failed to connect to the server!" << std::endl;
+                // 로컬 서버에 연결 실패 시, 사용자에게 IP 주소 입력 요청
+                std::cerr << "Failed to connect to local server. Enter new IP address (or type 'exit' to quit): ";
+                std::cin >> serverIp;
+
+                if (serverIp == "exit") {
+                    retry = false;
+                    break;
+                }
             }
         }
         else {
             std::cerr << "Failed to initialize client!" << std::endl;
+            break;
         }
     }
 

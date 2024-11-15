@@ -98,6 +98,7 @@ void CServer::StartListening() {
 //랜덤 숫자 생성 코드
 void CServer::SendRandomNumberToClient(SOCKET clientSocket) {
     // 1부터 20까지의 숫자를 벡터에 저장
+    // <= 오른쪽 숫자를 늘려서 범위 지정 가능
     std::vector<int> numbers;
     for (int i = 1; i <= 20; ++i) {
         numbers.push_back(i);
@@ -108,11 +109,12 @@ void CServer::SendRandomNumberToClient(SOCKET clientSocket) {
     std::mt19937 g(rd());  // Mersenne Twister 엔진을 사용
     std::shuffle(numbers.begin(), numbers.end(), g);  // 벡터 내 숫자 랜덤하게 섞기
 
-    // 첫 9개의 숫자를 랜덤으로 선택
-    numbers.resize(9);
+    //뽑을 사진 개수 선택
+    // 첫 16개 숫자를 랜덤으로 선택
+    numbers.resize(16);
 
     // 결과 메시지 생성
-    std::string message = "Random Numbers: ";
+    std::string message = "";
     for (int num : numbers) {
         message += std::to_string(num) + " ";
     }
@@ -124,10 +126,23 @@ void CServer::SendRandomNumberToClient(SOCKET clientSocket) {
 
 void CServer::DisplayClientInfo() {
     std::cout << "Current number of clients: " << m_clientSockets.size() << std::endl;
+
+    // 서버 콘솔에 각 클라이언트 소켓 ID 출력
     for (size_t i = 0; i < m_clientSockets.size(); ++i) {
         std::cout << "Client " << i + 1 << ": Socket ID: " << m_clientSockets[i] << std::endl;
     }
+
+    // 클라이언트 수를 문자열로 변환하여 전송
+    std::string clientCountMessage = "Current number of clients: " + std::to_string(m_clientSockets.size());
+    
+    // 접속된 클라이언트 수 정보를 요청한 클라이언트로 전송
+    for (const auto& clientSocket : m_clientSockets) {
+        send(clientSocket, clientCountMessage.c_str(), clientCountMessage.length(), 0);
+    }
+
+    std::cout << "Sent client count to requesting client: " << clientCountMessage << std::endl;
 }
+
 
 //클라이언트 명령어 리시브 코드
 void CServer::ReceiveCommandsFromClient(SOCKET clientSocket) {
