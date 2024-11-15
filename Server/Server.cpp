@@ -7,12 +7,12 @@
 #include <thread>
 #include <algorithm>  // std::remove 사용을 위한 헤더
 #include <random>
+#include <chrono>     // 카운트다운을 위한 라이브러리
 
 #pragma comment(lib, "ws2_32.lib")
 
 #define SERVER_PORT 9000
 #define BUF_SIZE 512
-
 
 // 서버 구조체
 class CServer {
@@ -23,14 +23,18 @@ public:
     void StartListening();
     void SendRandomNumberToClient(SOCKET clientSocket);
     void DisplayClientInfo();
-    void ReceiveCommandsFromClient(SOCKET clientSocket);  // 명령어 수신 함수 변경
+    void ReceiveCommandsFromClient(SOCKET clientSocket);
+    void StartGame();
+    void EndGame();
+    void SendProcessComplete(SOCKET clientSocket);
 
 private:
     SOCKET m_listenSocket;
     std::vector<SOCKET> m_clientSockets;
+    int gameState;  // 0: 준비, 1: 게임 시작, 2: 게임 중
 };
 
-CServer::CServer() : m_listenSocket(INVALID_SOCKET) {}
+CServer::CServer() : m_listenSocket(INVALID_SOCKET), gameState(0) {}
 
 CServer::~CServer() {
     if (m_listenSocket != INVALID_SOCKET) {
@@ -42,8 +46,6 @@ CServer::~CServer() {
     WSACleanup();
 }
 
-
-//서버 시작시 시작되는 코드
 bool CServer::Initialize() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -70,7 +72,6 @@ bool CServer::Initialize() {
     return true;
 }
 
-//서버 명령어 대기 관련 코드
 void CServer::StartListening() {
     if (listen(m_listenSocket, SOMAXCONN) == SOCKET_ERROR) {
         std::cerr << "Listen failed!" << std::endl;
@@ -95,10 +96,8 @@ void CServer::StartListening() {
     }
 }
 
-//랜덤 숫자 생성 코드
 void CServer::SendRandomNumberToClient(SOCKET clientSocket) {
     // 1부터 20까지의 숫자를 벡터에 저장
-    // <= 오른쪽 숫자를 늘려서 범위 지정 가능
     std::vector<int> numbers;
     for (int i = 1; i <= 20; ++i) {
         numbers.push_back(i);
@@ -109,42 +108,36 @@ void CServer::SendRandomNumberToClient(SOCKET clientSocket) {
     std::mt19937 g(rd());  // Mersenne Twister 엔진을 사용
     std::shuffle(numbers.begin(), numbers.end(), g);  // 벡터 내 숫자 랜덤하게 섞기
 
-    //뽑을 사진 개수 선택
-    // 첫 16개 숫자를 랜덤으로 선택
+    // 뽑을 숫자 개수 선택
     numbers.resize(16);
 
-    // 결과 메시지 생성
-    std::string message = "";
+    // 랜덤 숫자 리스트 전송
+    std::string message = "number_list: ";
     for (int num : numbers) {
         message += std::to_string(num) + " ";
     }
 
-    // 클라이언트에게 메시지 전송
     send(clientSocket, message.c_str(), message.length(), 0);
     std::cout << "Sent random numbers to client: " << message << std::endl;
 }
 
 void CServer::DisplayClientInfo() {
     std::cout << "Current number of clients: " << m_clientSockets.size() << std::endl;
-
-    // 서버 콘솔에 각 클라이언트 소켓 ID 출력
     for (size_t i = 0; i < m_clientSockets.size(); ++i) {
         std::cout << "Client " << i + 1 << ": Socket ID: " << m_clientSockets[i] << std::endl;
     }
-
-    // 클라이언트 수를 문자열로 변환하여 전송
-    std::string clientCountMessage = "Current number of clients: " + std::to_string(m_clientSockets.size());
-    
-    // 접속된 클라이언트 수 정보를 요청한 클라이언트로 전송
-    for (const auto& clientSocket : m_clientSockets) {
-        send(clientSocket, clientCountMessage.c_str(), clientCountMessage.length(), 0);
-    }
-
-    std::cout << "Sent client count to requesting client: " << clientCountMessage << std::endl;
 }
 
+void CServer::SendProcessComplete(SOCKET clientSocket) {
+    if (gameState == 2) {  // 게임 중 상태에서는 process_complete 전송하지 않음
+        return;
+    }
 
-//클라이언트 명령어 리시브 코드
+    std::string processCompleteMessage = "process_complete";
+    send(clientSocket, processCompleteMessage.c_str(), processCompleteMessage.length(), 0);
+    std::cout << "Sent 'process_complete' message to client." << std::endl;
+}
+
 void CServer::ReceiveCommandsFromClient(SOCKET clientSocket) {
     char buffer[BUF_SIZE];
 
@@ -157,11 +150,14 @@ void CServer::ReceiveCommandsFromClient(SOCKET clientSocket) {
 
             // 클라이언트로부터 명령어가 "game_start"이면 랜덤 번호 전송
             if (strcmp(buffer, "game_start") == 0) {
-                SendRandomNumberToClient(clientSocket);
-            }
-            // 클라이언트로부터 명령어가 "list"이면 클라이언트 정보 출력
-            else if (strcmp(buffer, "list") == 0) {
-                DisplayClientInfo();
+                if (gameState == 1 || gameState == 2) {
+                    std::string alreadyGameMessage = "Game already started or in progress.";
+                    send(clientSocket, alreadyGameMessage.c_str(), alreadyGameMessage.length(), 0);
+                    std::cout << "Sent 'Game already started' message to client." << std::endl;
+                }
+                else {
+                    StartGame();  // 게임 시작
+                }
             }
             // 클라이언트로부터 명령어가 "exit"이면 해당 클라이언트 종료
             else if (strcmp(buffer, "exit") == 0) {
@@ -177,6 +173,9 @@ void CServer::ReceiveCommandsFromClient(SOCKET clientSocket) {
                 send(clientSocket, unknownMessage.c_str(), unknownMessage.length(), 0);
                 std::cout << "Sent unknown command message to client." << std::endl;
             }
+
+            // 명령어 처리 후 완료 메시지 전송 (게임 중 상태에서는 전송하지 않음)
+            SendProcessComplete(clientSocket);
         }
         else {
             std::cerr << "Failed to receive data from client!" << std::endl;
@@ -185,12 +184,71 @@ void CServer::ReceiveCommandsFromClient(SOCKET clientSocket) {
     }
 }
 
+void CServer::StartGame() {
+    if (gameState == 1 || gameState == 2) {
+        std::cout << "Game already started or in progress!" << std::endl;
+        return;  // 게임이 이미 시작되었거나 진행 중이면 다시 시작하지 않음
+    }
+
+    // 게임 상태를 "게임 시작"으로 변경
+    gameState = 1;
+
+    // 게임 시작을 표시
+    std::cout << "Game started!" << std::endl;
+
+    // 모든 클라이언트에게 게임 시작 메시지 전송
+    std::string gameStartMessage = "game_start";
+    for (SOCKET clientSocket : m_clientSockets) {
+        send(clientSocket, gameStartMessage.c_str(), gameStartMessage.length(), 0);
+    }
+
+    // 10초 카운트다운
+    for (int i = 10; i > 0; --i) {
+        std::string countdownMessage = "Countdown: " + std::to_string(i) + " seconds";
+        for (SOCKET clientSocket : m_clientSockets) {
+            send(clientSocket, countdownMessage.c_str(), countdownMessage.length(), 0);
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    // 랜덤 숫자 전송
+    for (SOCKET clientSocket : m_clientSockets) {
+        SendRandomNumberToClient(clientSocket);
+    }
+
+    // 게임 상태를 "게임 중"으로 변경
+    gameState = 2;
+
+    std::cout << "Game in progress..." << std::endl;
+}
+
+void CServer::EndGame() {
+    if (gameState != 2) {
+        std::cout << "No game in progress!" << std::endl;
+        return;
+    }
+
+    // 게임 종료 상태로 변경
+    gameState = 0;
+    std::cout << "Game ended!" << std::endl;
+
+    // 게임 종료 메시지 전송
+    std::string gameEndMessage = "game_end";
+    for (SOCKET clientSocket : m_clientSockets) {
+        send(clientSocket, gameEndMessage.c_str(), gameEndMessage.length(), 0);
+    }
+
+    DisplayClientInfo();
+}
+
 int main() {
     CServer server;
 
-    if (server.Initialize()) {
-        server.StartListening();
+    if (!server.Initialize()) {
+        return -1;
     }
+
+    server.StartListening();
 
     return 0;
 }
