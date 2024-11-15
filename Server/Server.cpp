@@ -21,14 +21,14 @@ public:
     ~CServer();
     bool Initialize();
     void StartListening();
-    void SendRandomNumberToClient(SOCKET clientSocket);
-    void DisplayClientInfo();
+    void SendRandomNumberToClient(SOCKET clientSocket, std::vector<int> numbers);
     void ReceiveCommandsFromClient(SOCKET clientSocket);
     void StartGame();
     void EndGame();
     void SendProcessComplete(SOCKET clientSocket);
 
 private:
+    std::vector<int> GenerateRandomOddNumbers();
     SOCKET m_listenSocket;
     std::vector<SOCKET> m_clientSockets;
     int gameState;  // 0: 준비, 1: 게임 시작, 2: 게임 중
@@ -96,11 +96,12 @@ void CServer::StartListening() {
     }
 }
 
-void CServer::SendRandomNumberToClient(SOCKET clientSocket) {
-    // 1부터 20까지의 숫자 중 홀수만 선택
+std::vector<int> CServer::GenerateRandomOddNumbers() {
     std::vector<int> numbers;
+
+    // 1부터 20까지의 홀수만 선택
     for (int i = 1; i <= 20; ++i) {
-        if (i % 2 != 0) {  // 홀수만 추가
+        if (i % 2 != 0) {
             numbers.push_back(i);
         }
     }
@@ -113,6 +114,11 @@ void CServer::SendRandomNumberToClient(SOCKET clientSocket) {
     // 뽑을 숫자 개수는 8개로 제한
     numbers.resize(8);
 
+    return numbers;
+}
+
+
+void CServer::SendRandomNumberToClient(SOCKET clientSocket, std::vector<int> numbers){
     // 랜덤 홀수 리스트 전송
     std::string message = "number_list: ";
     for (int num : numbers) {
@@ -123,12 +129,6 @@ void CServer::SendRandomNumberToClient(SOCKET clientSocket) {
     std::cout << "Sent random odd numbers to client: " << message << std::endl;
 }
 
-void CServer::DisplayClientInfo() {
-    std::cout << "Current number of clients: " << m_clientSockets.size() << std::endl;
-    for (size_t i = 0; i < m_clientSockets.size(); ++i) {
-        std::cout << "Client " << i + 1 << ": Socket ID: " << m_clientSockets[i] << std::endl;
-    }
-}
 
 void CServer::SendProcessComplete(SOCKET clientSocket) {
     if (gameState == 2) {  // 게임 중 상태에서는 process_complete 전송하지 않음
@@ -169,7 +169,7 @@ void CServer::ReceiveCommandsFromClient(SOCKET clientSocket) {
                 EndGame();
 
                 // 정답을 맞춘 플레이어 정보를 모든 클라이언트에게 전송
-                std::string correctMessage = "Player with socket " + std::to_string(clientSocket) + " has answered correctly!";
+                std::string correctMessage = std::to_string(clientSocket)+ "번 소켓 플레이어가 정답을 맞췄습니다.";
                 for (SOCKET client : m_clientSockets) {
                     send(client, correctMessage.c_str(), correctMessage.length(), 0);
                 }
@@ -205,11 +205,12 @@ void CServer::ReceiveCommandsFromClient(SOCKET clientSocket) {
 
 
 void CServer::StartGame() {
+    std::vector<int> numbers = GenerateRandomOddNumbers();
     if (m_clientSockets.size() <= 1) {
-        std::cout << "Not enough players to start the game!" << std::endl;
+        std::cout << "게임을 시작할 플레이어가 부족합닏다" << std::endl;
 
         // 유저 부족 메시지 전송
-        std::string insufficientPlayersMessage = "Not enough players to start the game. At least 2 players are required.";
+        std::string insufficientPlayersMessage = "게임을 시작할 플레이어가 부족합니다 (최소 2명 필요)";
         for (SOCKET clientSocket : m_clientSockets) {
             send(clientSocket, insufficientPlayersMessage.c_str(), insufficientPlayersMessage.length(), 0);
         }
@@ -217,7 +218,7 @@ void CServer::StartGame() {
     }
 
     if (gameState == 1 || gameState == 2) {
-        std::cout << "Game already started or in progress!" << std::endl;
+        std::cout << "게임이 이미 진행중입니다" << std::endl;
         return;  // 게임이 이미 시작되었거나 진행 중이면 다시 시작하지 않음
     }
 
@@ -244,7 +245,7 @@ void CServer::StartGame() {
 
     // 랜덤 숫자 전송
     for (SOCKET clientSocket : m_clientSockets) {
-        SendRandomNumberToClient(clientSocket);
+        SendRandomNumberToClient(clientSocket, numbers);
     }
 
     // 게임 상태를 "게임 중"으로 변경
@@ -269,7 +270,6 @@ void CServer::EndGame() {
         send(clientSocket, gameEndMessage.c_str(), gameEndMessage.length(), 0);
     }
 
-    DisplayClientInfo();
 }
 
 int main() {

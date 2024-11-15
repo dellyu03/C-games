@@ -76,19 +76,19 @@ void CClient::ConnectToServer(const std::string& serverIp) {
     m_serverAddr.sin_port = htons(SERVER_PORT);
 
     if (inet_pton(AF_INET, serverIp.c_str(), &m_serverAddr.sin_addr) <= 0) {
-        std::cerr << "Invalid IP address!" << std::endl;
+        std::cerr << "유효하지 않은 ip 주소입니다" << std::endl;
         return;
     }
 
     int result = connect(m_socket, (SOCKADDR*)&m_serverAddr, sizeof(m_serverAddr));
     if (result == SOCKET_ERROR) {
         int errorCode = WSAGetLastError();
-        std::cerr << "Connection failed with error code: " << errorCode << std::endl;
+        std::cerr << "연결 실패 with error code: " << errorCode << std::endl;
         return;
     }
 
     m_isConnected = true;
-    std::cout << "Connected to server!" << std::endl;
+    std::cout << "서버에 연결되었습니다!" << std::endl;
 }
 
 void CClient::SendMessage(const std::string& message) {
@@ -112,12 +112,12 @@ void CClient::ReceiveMessagesAsync() {
             int bytesReceived = recv(m_socket, buffer, BUF_SIZE, 0);
 
             if (bytesReceived == SOCKET_ERROR) {
-                std::cerr << "Server connection lost!" << std::endl;
+                std::cerr << "서버 연결 유실" << std::endl;
                 Disconnect();
                 break;
             }
             else if (bytesReceived == 0) {
-                std::cerr << "Server closed the connection!" << std::endl;
+                std::cerr << "서버가 연결을 종료하였습니다." << std::endl;
                 Disconnect();
                 break;
             }
@@ -168,7 +168,7 @@ void CClient::ReceiveMessagesAsync() {
                     std::mt19937 g(rd());
                     std::shuffle(m_selectedFiles.begin(), m_selectedFiles.end(), g);
 
-                    std::cout << "Selected Files:\n";
+                    std::cout << "선택된 파일:\n";
                     for (size_t i = 0; i < m_selectedFiles.size(); ++i) {
                         std::cout << i + 1 << ") " << m_selectedFiles[i] << "\n";
                     }
@@ -180,7 +180,7 @@ void CClient::ReceiveMessagesAsync() {
         else if (selectResult == 0) {
         }
         else {
-            std::cerr << "Error in receiving data from server!" << std::endl;
+            std::cerr << "서버에서 데이터를 받는데 실패했습니다" << std::endl;
             Disconnect();
             break;
         }
@@ -193,7 +193,7 @@ void CClient::UserInput() {
 
         if (m_isConnected && !m_isGameInProgress) {
             // 게임이 진행 중이지 않으면 명령 입력 받기
-            std::cout << "Enter command to send to server: ";
+            std::cout << "명령어 입력: ";
             std::cin >> command;
             std::cin.ignore();  // 버퍼에 남은 엔터 입력을 처리
 
@@ -203,7 +203,7 @@ void CClient::UserInput() {
             }
             else if (command == "connect") {
                 std::string serverIp;
-                std::cout << "Enter server IP to reconnect: ";
+                std::cout << "다시 연결할 서버 ip 입력: ";
                 std::cin >> serverIp;
                 ConnectToServer(serverIp);
             }
@@ -211,12 +211,12 @@ void CClient::UserInput() {
                 SendMessage(command);
             }
             else {
-                std::cout << "Cannot send command. Please connect to the server first." << std::endl;
+                std::cout << "명령어를 보낼 수 없습니다 먼저 서버에 연결해 주세요." << std::endl;
             }
         }
         else if (m_isGameInProgress) {
             // 게임 진행 중일 때 정답 입력 받기
-            std::cout << "\nEnter two numbers to check files (e.g., '1 3'): ";
+            std::cout << "\n숫자 두개를 입력하세요 (e.g., '1 3'): ";
             std::string input;
             std::getline(std::cin, input);  // 사용자 입력 받기
 
@@ -232,27 +232,27 @@ void CClient::UserInput() {
                     // 파일 짝 맞추기 검사
                     if (file1.find("짝") != std::string::npos &&
                         file2 == file1.substr(0, file1.find("짝")) + file1.substr(file1.find("짝") + 2)) {
-                        std::cout << "Correct! You've found a match: " << file1 << " and " << file2 << std::endl;
+                        std::cout << "맞았습니다" << file1 << " and " << file2 << std::endl;
                         SendMessage("correct");
                         break;
                     }
                     else if (file2.find("짝") != std::string::npos &&
                         file1 == file2.substr(0, file2.find("짝")) + file2.substr(file2.find("짝") + 2)) {
-                        std::cout << "Correct! You've found a match: " << file1 << " and " << file2 << std::endl;
+                        std::cout << "맞았습니다" << file1 << " and " << file2 << std::endl;
                         SendMessage("correct");
                         break;
                     }
                     else {
-                        std::cout << "Wrong! These files do not match. Try again!" << std::endl;
+                        std::cout << "틀렸습니다. 다시 시도해 보세요" << std::endl;
                         SendMessage("wrong");
                     }
                 }
                 else {
-                    std::cout << "Invalid input. Please enter two valid file numbers separated by a space." << std::endl;
+                    std::cout << "유효하지 않은 입력입니다. 숫자 사이를 공백으로 분리해 주세요" << std::endl;
                 }
             }
             else {
-                std::cout << "Unknown command. Please enter two numbers separated by a space." << std::endl;
+                std::cout << "알 수 없는 명령어 입니다." << std::endl;
             }
         }
     }
@@ -260,24 +260,24 @@ void CClient::UserInput() {
 
 void CClient::Disconnect() {
     m_isConnected = false;
-    std::cout << "Disconnected from the server." << std::endl;
+    std::cout << "서버와 연결을 끊었습니다." << std::endl;
     closesocket(m_socket);
     WSACleanup();
 }
 
 void CClient::HandleCompletedMessage() {
-    std::cout << "All clients completed the task." << std::endl;
+    std::cout << "모든 클라이언트가 작업을 완료했습니다." << std::endl;
     EndGame();
 }
 
 void CClient::StartGame() {
     m_isGameInProgress = true;
-    std::cout << "Game started!" << std::endl;
+    std::cout << "게임 시작!" << std::endl;
 }
 
 void CClient::EndGame() {
     m_isGameInProgress = false;
-    std::cout << "Game over!" << std::endl;
+    std::cout << "게임 오버!" << std::endl;
 }
 
 std::vector<std::string> CClient::GetFileList(const std::string& directoryPath) {
